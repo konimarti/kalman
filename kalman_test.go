@@ -21,7 +21,7 @@ func NewSetup() (*context, *prediction, *update) {
 	pred.F = mat.NewDense(2, 2, []float64{1, dt, 0, 1})
 	pred.B = mat.NewDense(2, 1, []float64{0.5 * dt * dt, dt})
 
-	pred.W = mat.NewDense(2, 2, nil)
+	//pred.W = mat.NewDense(2, 2, nil)
 	pred.Q = mat.NewDense(2, 2, nil)
 
 	// init update
@@ -96,7 +96,7 @@ func TestUpdate(t *testing.T) {
 
 func TestFilter(t *testing.T) {
 	ctx, pred, upd := NewSetup()
-	filter := NewFilter(ctx.X, ctx.P, pred.F, pred.B, upd.H, upd.R)
+	filter := NewFilter(ctx.X, ctx.P, pred.F, pred.B, pred.Q, upd.H, upd.R)
 
 	ctrl := mat.NewVecDense(1, []float64{2.0})
 	z := mat.NewVecDense(2, []float64{4260.0, 282.0})
@@ -107,6 +107,13 @@ func TestFilter(t *testing.T) {
 		fmt.Println("actual:", filteredState)
 		fmt.Println("expected:", expectedX)
 		t.Error("ApplyFilter")
+	}
+
+	checkState := filter.State()
+	if !mat.EqualApprox(filteredState, checkState, 1e-4) {
+		fmt.Println("actual:", checkState)
+		fmt.Println("expected:", filteredState)
+		t.Error("StateFilter")
 	}
 
 }

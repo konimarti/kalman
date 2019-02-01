@@ -39,6 +39,13 @@ func main() {
 	// no external influence
 	B := mat.NewDense(4, 4, nil)
 
+	// process model covariance matrix
+	Q := mat.NewDense(4, 4, []float64{
+		dt * dt * dt * 0.33, 0, dt * dt * 0.5, 0,
+		0, dt * dt * dt * 0.33, 0, dt * dt * 0.5,
+		dt * dt * 0.5, 0, dt, 0,
+		0, dt * dt * 0.5, 0, dt})
+
 	// scaling matrix: only measure velocities
 	H := mat.NewDense(2, 4, []float64{
 		0, 0, 1, 0,
@@ -48,7 +55,7 @@ func main() {
 	R := mat.NewDense(2, 2, []float64{100, 0, 0, 100})
 
 	// create Kalman filter
-	filter := kalman.NewFilter(X, P, F, B, H, R)
+	filter := kalman.NewFilter(X, P, F, B, Q, H, R)
 
 	// no control
 	control := mat.NewVecDense(4, nil)

@@ -15,7 +15,7 @@ type prediction struct {
 	F *mat.Dense // Prediction matrix
 	B *mat.Dense // Control matrix
 
-	W *mat.Dense // Prediction noise
+	//W *mat.Dense // Prediction noise
 	Q *mat.Dense // External noise
 }
 
@@ -31,16 +31,17 @@ func (P *prediction) NextState(ctx *context, ctrl mat.Vector) error {
 
 func (P *prediction) NextCovariance(ctx *context) error {
 	// predict new covariance matrix
-	// P_new = F * P * F^t
+	// P_new = F * P * F^t + Q
 	var PFt mat.Dense
 	PFt.Mul(ctx.P, P.F.T())
 	ctx.P.Mul(P.F, &PFt)
+	ctx.P.Add(ctx.P, P.Q)
 	return nil
 }
 
 type update struct {
 	H *mat.Dense // scaling matrix
-	R *mat.Dense // error in measurements
+	R *mat.Dense // measurements errors
 }
 
 func (u *update) Update(ctx *context, z mat.Vector) error {
@@ -75,6 +76,7 @@ func (u *update) Update(ctx *context, z mat.Vector) error {
 //Filter interface for using the Kalman filter
 type Filter interface {
 	Apply(z, ctrl mat.Vector) mat.Vector
+	State() mat.Vector
 }
 
 type filterImpl struct {
@@ -88,8 +90,15 @@ func (f *filterImpl) Apply(z, ctrl mat.Vector) mat.Vector {
 	f.Pred.NextState(&f.Ctx, ctrl)
 	f.Pred.NextCovariance(&f.Ctx)
 	f.Upd.Update(&f.Ctx, z)
+	var filtered mat.VecDense
+	filtered.MulVec(f.Upd.H, f.Ctx.X)
+	return &filtered
+}
+
+//State return the current state of the context
+func (f *filterImpl) State() mat.Vector {
 	var state mat.VecDense
-	state.MulVec(f.Upd.H, f.Ctx.X)
+	state.CloneVec(f.Ctx.X)
 	return &state
 }
 
@@ -100,7 +109,7 @@ func (f *filterImpl) Apply(z, ctrl mat.Vector) mat.Vector {
 //B: control matrix
 //H: scaling matrix for measurements
 //R: measurement error matrix
-func NewFilter(X *mat.VecDense, P, F, B, H, R *mat.Dense) Filter {
+func NewFilter(X *mat.VecDense, P, F, B, Q, H, R *mat.Dense) Filter {
 	var ctx context
 	var pred prediction
 	var upd update
@@ -114,8 +123,8 @@ func NewFilter(X *mat.VecDense, P, F, B, H, R *mat.Dense) Filter {
 	pred.B = B
 
 	// noises
-	pred.W = mat.NewDense(2, 2, nil)
-	pred.Q = mat.NewDense(2, 2, nil)
+	//pred.W = mat.NewDense(2, 2, nil)
+	pred.Q = Q
 
 	// update
 	upd.H = H
