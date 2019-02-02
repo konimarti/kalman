@@ -17,6 +17,7 @@
 		P, // initial process covariance (n x n)
 		F, // prediction matrix (n x n)
 		B, // control matrix (n x k)
+		Q, // process model covariance matrix (n x n)
 		H, // measurement matrix (l x n)
 		R, // measurement errors (l x l)
 	)
