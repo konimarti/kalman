@@ -1,4 +1,4 @@
-# Kalman filtering in Golang
+# Adaptive Kalman filtering in Golang
 
 [![License](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://github.com/konimarti/kalman/blob/master/LICENSE)
 [![GoDoc](https://godoc.org/github.com/konimarti/observer?status.svg)](https://godoc.org/github.com/konimarti/kalman)
@@ -6,7 +6,9 @@
 
 ```go get github.com/konimarti/kalman```
 
-## Usage
+Adaptive Kalman filtering with Rapid Ongoing Stochastic covariance Estimation (ROSE) 
+
+## Usage for standard Kalman filtering
 ```go
 	// create matrices and vectors
 	...
@@ -30,13 +32,17 @@
 }
 ```
 
-### Results
+### Results with standard Kalman filter
 
 ![Results of Kalman filtering on car example.](example/car/car.png)
 
-### Examples
+See example [here](example/car/car.go).
 
-See more examples [here](example/car/car.go).
+### Results with Rapid Ongoing Stochasic covariance Estimation (ROSE) filter
+
+![Results of ROSE filtering.](example/rose/rose.png)
+
+See example [here](example/rose/rose.go).
 
 ## Credits
 
