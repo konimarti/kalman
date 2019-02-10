@@ -65,10 +65,12 @@ func (u *update) Update(ctx *context, z mat.Vector) error {
 	err := kt.Solve(denom.T(), PHt.T())
 	if err != nil {
 		fmt.Println(err)
-		fmt.Println("Setting Kalman to identity")
-		kt.Pow(&kt, 0)
+		fmt.Println("Setting Kalman gain to zero")
+		denom.Zero()
+		K.Product(ctx.P, u.H.T(), &denom)
+	} else {
+		K.Clone(kt.T())
 	}
-	K.Clone(kt.T())
 
 	// update state
 	// X~_k = X_k + K * [z_k - H * X_k]
