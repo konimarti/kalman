@@ -7,6 +7,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+//NewSetup is a helper functions for tests
 func NewSetup() (*context, *prediction, *update) {
 	var ctx context
 	var pred prediction

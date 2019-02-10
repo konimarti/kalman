@@ -3,6 +3,8 @@ package kalman
 // https://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/
 
 import (
+	"fmt"
+
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -15,13 +17,12 @@ type prediction struct {
 	F *mat.Dense // Prediction matrix
 	B *mat.Dense // Control matrix
 
-	//W *mat.Dense // Prediction noise
 	Q *mat.Dense // External noise
 }
 
 func (P *prediction) NextState(ctx *context, ctrl mat.Vector) error {
 	// predict new state
-	// X_k = F * X_k-1 + B * ctrl + W
+	// X_k = F * X_k-1 + B * ctrl
 	var Fx, Bmu mat.VecDense
 	Fx.MulVec(P.F, ctx.X)
 	Bmu.MulVec(P.B, ctrl)
@@ -83,22 +84,42 @@ type filterImpl struct {
 	Ctx  context
 	Pred prediction
 	Upd  update
+
+	savedState *mat.VecDense
 }
 
 //Apply implements the Filter interface
 func (f *filterImpl) Apply(z, ctrl mat.Vector) mat.Vector {
-	f.Pred.NextState(&f.Ctx, ctrl)
-	f.Pred.NextCovariance(&f.Ctx)
-	f.Upd.Update(&f.Ctx, z)
+	// correct state and covariance
+	err := f.Upd.Update(&f.Ctx, z)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// get y
 	var filtered mat.VecDense
 	filtered.MulVec(f.Upd.H, f.Ctx.X)
+
+	// save state
+	f.savedState = mat.VecDenseCopyOf(f.Ctx.X)
+
+	// predict next state and covariance
+	err = f.Pred.NextState(&f.Ctx, ctrl)
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = f.Pred.NextCovariance(&f.Ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	return &filtered
 }
 
 //State return the current state of the context
 func (f *filterImpl) State() mat.Vector {
 	var state mat.VecDense
-	state.CloneVec(f.Ctx.X)
+	state.CloneVec(f.savedState)
 	return &state
 }
 
@@ -107,6 +128,7 @@ func (f *filterImpl) State() mat.Vector {
 //P: initial covariance matrix
 //F: prediction matrix
 //B: control matrix
+//Q: system noise covariance matrix
 //H: scaling matrix for measurements
 //R: measurement error matrix
 func NewFilter(X *mat.VecDense, P, F, B, Q, H, R *mat.Dense) Filter {
@@ -130,5 +152,5 @@ func NewFilter(X *mat.VecDense, P, F, B, Q, H, R *mat.Dense) Filter {
 	upd.H = H
 	upd.R = R
 
-	return &filterImpl{ctx, pred, upd}
+	return &filterImpl{ctx, pred, upd, nil}
 }
