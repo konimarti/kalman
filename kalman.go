@@ -33,9 +33,7 @@ func (P *prediction) NextState(ctx *context, ctrl mat.Vector) error {
 func (P *prediction) NextCovariance(ctx *context) error {
 	// predict new covariance matrix
 	// P_new = F * P * F^t + Q
-	var PFt mat.Dense
-	PFt.Mul(ctx.P, P.F.T())
-	ctx.P.Mul(P.F, &PFt)
+	ctx.P.Product(P.F, ctx.P, P.F.T())
 	ctx.P.Add(ctx.P, P.Q)
 	return nil
 }
@@ -47,17 +45,33 @@ type update struct {
 
 func (u *update) Update(ctx *context, z mat.Vector) error {
 	// kalman gain
-	var K, PHt, HPHt, denom mat.Dense
+	// K = P H^T (H P H^T + R)^-1
+	var K, kt, PHt, HPHt, denom mat.Dense
 	PHt.Mul(ctx.P, u.H.T())
 	HPHt.Mul(u.H, &PHt)
 	denom.Add(&HPHt, u.R)
+	/* calculation of Kalman gain with mat.Inverse(..)
 	if err := denom.Inverse(&denom); err != nil {
-		panic(err)
+		fmt.Println(err)
+		fmt.Println("Setting inverse to identity")
+		denom.Pow(&denom, 0)
 	}
 	K.Mul(&PHt, &denom)
+	*/
+	// calculation of Kalman gain with mat.Solve(..)
+	// K = P H^T (H P H^T + R)^-1
+	// K * (H P H^T + R) = P H^T
+	// (H P H^T + R)^T K^T = (P H^T )^T
+	err := kt.Solve(denom.T(), PHt.T())
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("Setting Kalman to identity")
+		kt.Pow(&kt, 0)
+	}
+	K.Clone(kt.T())
 
 	// update state
-	// X'_k = X_k + K * [z_k - H * X_k]
+	// X~_k = X_k + K * [z_k - H * X_k]
 	var HXk, bracket, Kupd mat.VecDense
 	HXk.MulVec(u.H, ctx.X)
 	bracket.SubVec(z, &HXk)
@@ -65,10 +79,9 @@ func (u *update) Update(ctx *context, z mat.Vector) error {
 	ctx.X.AddVec(ctx.X, &Kupd)
 
 	// update covariance
-	// P'_k = P_k - K' * [H_k * P_k]
-	var KHP, HP mat.Dense
-	HP.Mul(u.H, ctx.P)
-	KHP.Mul(&K, &HP)
+	// P~_k = P_k - K * [H_k * P_k]
+	var KHP mat.Dense
+	KHP.Product(&K, u.H, ctx.P)
 	ctx.P.Sub(ctx.P, &KHP)
 
 	return nil
