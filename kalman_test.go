@@ -103,7 +103,7 @@ func TestFilter(t *testing.T) {
 	z := mat.NewVecDense(2, []float64{4260.0, 282.0})
 
 	filteredState := filter.Apply(z, ctrl)
-	expectedX := mat.NewVecDense(2, []float64{4272.32678984, 281.70900693})
+	expectedX := mat.NewVecDense(2, []float64{4105.238095238095, 280.8196721311475})
 	if !mat.EqualApprox(expectedX, filteredState, 1e-4) {
 		fmt.Println("actual:", filteredState)
 		fmt.Println("expected:", expectedX)
