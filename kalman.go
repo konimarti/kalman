@@ -69,7 +69,7 @@ func (u *update) Update(ctx *context, z mat.Vector) error {
 		denom.Zero()
 		K.Product(ctx.P, u.H.T(), &denom)
 	} else {
-		K.Clone(kt.T())
+		K.CloneFrom(kt.T())
 	}
 
 	// update state
