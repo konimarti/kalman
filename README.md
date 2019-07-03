@@ -6,9 +6,11 @@
 
 ```go get github.com/konimarti/kalman```
 
-Adaptive Kalman filtering with Rapid Ongoing Stochastic covariance Estimation (ROSE) 
+* Adaptive Kalman filtering with Rapid Ongoing Stochastic covariance Estimation (ROSE) 
 
-## Usage for standard Kalman filtering
+* A helpful introduction to how Kalman filters work, can be found [here](https://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/).
+
+## Using the standard Kalman filter
 ```go
 	// create matrices and vectors
 	...
