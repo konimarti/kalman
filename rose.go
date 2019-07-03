@@ -1,57 +1,29 @@
 package kalman
 
 import (
-	"fmt"
-
+	"github.com/konimarti/lti"
 	"gonum.org/v1/gonum/mat"
 )
 
-type filterRoseImpl struct {
-	Ctx  context
-	Pred prediction
-	Upd  update
+type roseImpl struct {
+	Std  filterImpl
 	Rose rose
-
-	savedState *mat.VecDense
 }
 
 //Apply implements the Filter interface
-func (f *filterRoseImpl) Apply(z, ctrl mat.Vector) mat.Vector {
+func (r *roseImpl) Apply(ctx *Context, z, ctrl *mat.VecDense) mat.Vector {
 
 	// update rose
-	f.Upd.R = f.Rose.R(z)
-	f.Pred.Q = f.Rose.Q(z, f.Ctx.X, f.Ctx.P, f.Pred.F, f.Upd.H, f.Upd.R)
+	r.Std.Nse.R = r.Rose.R(z)
+	r.Std.Nse.Q = r.Rose.Q(z, ctx, r.Std.Lti, r.Std.Nse.R)
 
-	// correct state and covariance
-	err := f.Upd.Update(&f.Ctx, z)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// get y
-	var filtered mat.VecDense
-	filtered.MulVec(f.Upd.H, f.Ctx.X)
-
-	// save state
-	f.savedState = mat.VecDenseCopyOf(f.Ctx.X)
-
-	// predict next state and covariance
-	err = f.Pred.NextState(&f.Ctx, ctrl)
-	if err != nil {
-		fmt.Println(err)
-	}
-	err = f.Pred.NextCovariance(&f.Ctx)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	return &filtered
+	return r.Std.Apply(ctx, z, ctrl)
 }
 
 //State return the current state of the context
-func (f *filterRoseImpl) State() mat.Vector {
+func (r *roseImpl) State() mat.Vector {
 	var state mat.VecDense
-	state.CloneVec(f.savedState)
+	state.CloneVec(r.Std.savedState)
 	return &state
 }
 
@@ -60,7 +32,7 @@ type rose struct {
 	AlphaR float64
 	AlphaM float64
 
-	G *mat.Dense
+	Gd *mat.Dense
 
 	E1  *mat.VecDense
 	EE1 *mat.Dense
@@ -69,7 +41,12 @@ type rose struct {
 }
 
 //Q
-func (r *rose) Q(y, x mat.Vector, P, F, H, R *mat.Dense) *mat.Dense {
+func (r *rose) Q(y *mat.VecDense, ctx *Context, lti lti.Discrete, R *mat.Dense) *mat.Dense {
+	x := ctx.X
+	P := ctx.P
+	H := lti.C
+	F := lti.Ad
+
 	// dy = y - hx
 	var hx, dy mat.VecDense
 	hx.MulVec(H, x)
@@ -96,7 +73,7 @@ func (r *rose) Q(y, x mat.Vector, P, F, H, R *mat.Dense) *mat.Dense {
 
 	// q = Gd * qk * Gd^T
 	var q mat.Dense
-	q.Product(r.G, &qk, r.G.T())
+	q.Product(r.Gd, &qk, r.Gd.T())
 
 	// make sure there are no negative values
 	n, c := q.Dims()
@@ -136,45 +113,30 @@ func (r *rose) R(y mat.Vector) *mat.Dense {
 
 //NewRoseFilter returns a ROSE Kalman filter
 //Rapid Ongoing Stochasic covariance Estimation (ROSE) Filter
-//X: initial state
-//P: initial covariance matrix
-//F: prediction matrix
-//B: control matrix
-//H: scaling matrix for measurements
-//G: discretized G matrix for system noise
+//lti: discrete linear, time-invariante system
+//Gd: discretized G matrix for system noise
 //gammaR: Gain factor for measurement noise
 //alphaR: Kalman gain for measurment covariance noise
 //alphaM: Kalman gain for covariance M
-func NewRoseFilter(X *mat.VecDense, P, F, B, H, G *mat.Dense, gammaR, alphaR, alphaM float64) Filter {
-	var ctx context
-	var pred prediction
-	var upd update
-	var rose rose
+func NewRoseFilter(lti lti.Discrete, Gd *mat.Dense, gammaR, alphaR, alphaM float64) Filter {
+	// create dummy noise struct
+	q, _ := lti.Ad.Dims()
+	r, _ := lti.C.Dims()
+	nse := NewZeroNoise(q, r)
 
-	// context
-	ctx.X = X
-	ctx.P = P
+	// create the standard Kalman filter
+	filter := filterImpl{lti, nse, nil}
 
-	// prediction
-	pred.F = F
-	pred.B = B
+	// create new rose struct
+	rose := rose{
+		Gamma:  gammaR,
+		AlphaR: alphaR,
+		AlphaM: alphaM,
+		Gd:     Gd,
+		E1:     mat.NewVecDense(r, nil),
+		EE1:    mat.NewDense(r, r, nil),
+		M:      mat.NewDense(r, r, nil),
+	}
 
-	// noises
-	pred.Q = nil
-
-	// update
-	n, _ := H.Dims()
-	upd.H = H
-	upd.R = nil
-
-	// rose
-	rose.Gamma = gammaR
-	rose.AlphaR = alphaR
-	rose.AlphaM = alphaM
-	rose.G = G
-	rose.E1 = mat.NewVecDense(n, nil)
-	rose.EE1 = mat.NewDense(n, n, nil)
-	rose.M = mat.NewDense(n, n, nil)
-
-	return &filterRoseImpl{ctx, pred, upd, rose, nil}
+	return &roseImpl{filter, rose}
 }

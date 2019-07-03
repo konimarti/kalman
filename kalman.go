@@ -21,6 +21,17 @@ type Noise struct {
 	R *mat.Dense // measurement noise
 }
 
+//NewZeroNoise initializes a Noise struct
+//q: dimension of square matrix Q
+//r: dimension of square matrix R
+func NewZeroNoise(q, r int) Noise {
+	nse := Noise{
+		Q: mat.NewDense(q, q, nil),
+		R: mat.NewDense(r, r, nil),
+	}
+	return nse
+}
+
 //Filter interface for using the Kalman filter
 type Filter interface {
 	Apply(ctx *Context, z, ctrl *mat.VecDense) mat.Vector
