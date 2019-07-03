@@ -15,76 +15,74 @@ type Context struct {
 	P *mat.Dense    // Current covariance matrix
 }
 
-//Noise represents the measurement and system noise 
+//Noise represents the measurement and system noise
 type Noise struct {
 	Q *mat.Dense // (discretized) system noise
-	R *mat.Dense    // measurement noise
+	R *mat.Dense // measurement noise
 }
 
 //Filter interface for using the Kalman filter
 type Filter interface {
-	Apply(z, ctrl *mat.VecDense) mat.Vector
+	Apply(ctx *Context, z, ctrl *mat.VecDense) mat.Vector
 	State() mat.Vector
 }
 
 //filtImpl is the implementation of the filter interface
 type filterImpl struct {
-	Ctx  Context
-	Lti  lti.Discrete
-	Nse  Noise
+	Lti        lti.Discrete
+	Nse        Noise
 	savedState *mat.VecDense
 }
 
 //NewFilter returns a Kalman filter
-func NewFilter(ctx Context, lti lti.Discrete, nse Noise) Filter {
-	return &filterImpl{ctx, lti, nse, ctx.X}
+func NewFilter(lti lti.Discrete, nse Noise) Filter {
+	return &filterImpl{lti, nse, nil}
 }
 
 //Apply implements the Filter interface
-func (f *filterImpl) Apply(z, ctrl *mat.VecDense) mat.Vector {
+func (f *filterImpl) Apply(ctx *Context, z, ctrl *mat.VecDense) mat.Vector {
 	// correct state and covariance
-	err := f.Update(z, ctrl)
+	err := f.Update(ctx, z, ctrl)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	// get response of system y
-	filtered := f.Lti.Response(f.Ctx.X, ctrl)
+	filtered := f.Lti.Response(ctx.X, ctrl)
 
 	// save current context state
-	f.savedState = mat.VecDenseCopyOf(f.Ctx.X)
+	f.savedState = mat.VecDenseCopyOf(ctx.X)
 
-	// predict new state 
-	f.NextState(ctrl)
+	// predict new state
+	f.NextState(ctx, ctrl)
 
 	// predict new covariance matrix
-	f.NextCovariance()
+	f.NextCovariance(ctx)
 
 	return filtered
 }
 
 //NextState
-func (f *filterImpl) NextState(ctrl *mat.VecDense) error {
+func (f *filterImpl) NextState(ctx *Context, ctrl *mat.VecDense) error {
 	// X_k = Ad * X_k-1 + Bd * ctrl
-	f.Ctx.X = f.Lti.Predict(f.Ctx.X, ctrl)
+	ctx.X = f.Lti.Predict(ctx.X, ctrl)
 	return nil
 }
 
 //NextCovariance
-func (f *filterImpl) NextCovariance() error {
+func (f *filterImpl) NextCovariance(ctx *Context) error {
 	// P_new = Ad * P * Ad^t + Q
-	f.Ctx.P.Product(f.Lti.Ad, f.Ctx.P, f.Lti.Ad.T())
-	f.Ctx.P.Add(f.Ctx.P, f.Nse.Q)
+	ctx.P.Product(f.Lti.Ad, ctx.P, f.Lti.Ad.T())
+	ctx.P.Add(ctx.P, f.Nse.Q)
 	return nil
 }
 
-
 //Update performs Kalman update
-func (f *filterImpl) Update(z, ctrl mat.Vector) error {
+func (f *filterImpl) Update(ctx *Context, z, ctrl mat.Vector) error {
 	// kalman gain
 	// K = P H^T (H P H^T + R)^-1
 	var K, kt, PHt, HPHt, denom mat.Dense
-	PHt.Mul(f.Ctx.P, f.Lti.C.T())
+	PHt.Mul(ctx.P, f.Lti.C.T())
 	HPHt.Mul(f.Lti.C, &PHt)
 	denom.Add(&HPHt, f.Nse.R)
 
@@ -97,7 +95,7 @@ func (f *filterImpl) Update(z, ctrl mat.Vector) error {
 		fmt.Println(err)
 		fmt.Println("Setting Kalman gain to zero")
 		denom.Zero()
-		K.Product(f.Ctx.P, f.Lti.C.T(), &denom)
+		K.Product(ctx.P, f.Lti.C.T(), &denom)
 	} else {
 		K.CloneFrom(kt.T())
 	}
@@ -105,18 +103,18 @@ func (f *filterImpl) Update(z, ctrl mat.Vector) error {
 	// update state
 	// X~_k = X_k + K * [z_k - H * X_k - D * ctrl ]
 	var HXk, DCtrl, bracket, Kupd mat.VecDense
-	HXk.MulVec(f.Lti.C, f.Ctx.X)
+	HXk.MulVec(f.Lti.C, ctx.X)
 	DCtrl.MulVec(f.Lti.D, ctrl)
 	bracket.SubVec(z, &HXk)
 	//bracket.SubVec(&bracket, &DCtrl)
 	Kupd.MulVec(&K, &bracket)
-	f.Ctx.X.AddVec(f.Ctx.X, &Kupd)
+	ctx.X.AddVec(ctx.X, &Kupd)
 
 	// update covariance
 	// P~_k = P_k - K * [H_k * P_k]
 	var KHP mat.Dense
-	KHP.Product(&K, f.Lti.C, f.Ctx.P)
-	f.Ctx.P.Sub(f.Ctx.P, &KHP)
+	KHP.Product(&K, f.Lti.C, ctx.P)
+	ctx.P.Sub(ctx.P, &KHP)
 
 	return nil
 }
@@ -127,4 +125,3 @@ func (f *filterImpl) State() mat.Vector {
 	state.CloneVec(f.savedState)
 	return &state
 }
-
