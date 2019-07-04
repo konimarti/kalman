@@ -10,6 +10,18 @@
 
 * A helpful introduction to how Kalman filters work, can be found [here](https://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/).
 
+* Kalman filters are based on a state-space representation of linear, time-invariant systems:
+
+	The next state is defined as
+	```math
+	 x(t+1) = A_d * x(t) + B_d * u(t) 
+	```
+	 where A_d is the discretized prediction matrix and B_d the control matrix. 
+	 x(t) is the current state and u(t) the external input. The response (measurement) of the system is y(t):	 
+	```math
+	 y(t)  = C * x(t) + D * u(t) 
+	```
+
 ## Using the standard Kalman filter
 ```go
 
