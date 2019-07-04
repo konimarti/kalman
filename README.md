@@ -24,22 +24,18 @@
 
 ## Using the standard Kalman filter
 ```go
-
 	// create filter
 	filter := kalman.NewFilter(
-
 		lti.Discrete{
 			Ad, // prediction matrix (n x n)
 			Bd, // control matrix (n x k)
 			C,  // measurement matrix (l x n)
 			D,  // measurement matrix (l x n)
 		},
-
 		kalman.Noise{
 			Q, // process model covariance matrix (n x n)
 			R, // measurement errors (l x l)
 		}
-
 	)
 
 	// create context
