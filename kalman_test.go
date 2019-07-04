@@ -4,43 +4,80 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/konimarti/lti"
 	"gonum.org/v1/gonum/mat"
 )
 
-//NewSetup is a helper functions for tests
-func NewSetup() (*context, *prediction, *update) {
-	var ctx context
-	var pred prediction
-	var upd update
+// Testing based on example on page 145 in book "Kalman Filter" by R. Marchthaler, 2017
 
-	// init ctx
-	ctx.X = mat.NewVecDense(2, []float64{4000.0, 280.0})
-	ctx.P = mat.NewDense(2, 2, []float64{425, 0, 0, 25})
+//newContext
+func newContext() *Context {
+	// define current context
+	ctx := Context{
+		X: mat.NewVecDense(4, []float64{976.32452, 0, 0.092222, 0}),
+		P: mat.NewDense(4, 4, []float64{
+			3, 0, 0, 0,
+			0, 3, 0, 0,
+			0, 0, 3, 0,
+			0, 0, 0, 0.03,
+		}),
+	}
+	return &ctx
+}
 
-	// init prediction
-	dt := 1.0
-	pred.F = mat.NewDense(2, 2, []float64{1, dt, 0, 1})
-	pred.B = mat.NewDense(2, 1, []float64{0.5 * dt * dt, dt})
+//newSetup is a helper functions for tests
+func newSetup() (lti.Discrete, Noise) {
 
-	//pred.W = mat.NewDense(2, 2, nil)
-	pred.Q = mat.NewDense(2, 2, nil)
+	// define LTI system
+	dt := 0.1
+	lti := lti.Discrete{
+		Ad: mat.NewDense(4, 4, []float64{
+			1, dt, 0.5 * dt * dt, 0,
+			0, 1, dt, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1,
+		}),
+		Bd: mat.NewDense(4, 1, nil),
+		C: mat.NewDense(2, 4, []float64{
+			1, 0, 0, 0,
+			0, 0, 1, -1,
+		}),
+		D: mat.NewDense(2, 1, nil),
+	}
 
-	// init update
-	upd.H = mat.NewDense(2, 2, []float64{1, 0, 0, 1})
-	upd.R = mat.NewDense(2, 2, []float64{625, 0, 0, 36})
+	// define system and measurement noise
+	q1 := 100.0 / 9.0
+	q2 := 0.04 / 1000.0
+	nse := Noise{
+		Q: mat.NewDense(4, 4, []float64{
+			0.25 * q1 * dt * dt * dt * dt, 0.5 * q1 * dt * dt * dt, 0.5 * q1 * dt * dt, 0,
+			0.5 * q1 * dt * dt * dt, q1 * dt * dt, q1 * dt, 0,
+			0.5 * q1 * dt * dt, q1 * dt, q1, 0,
+			0, 0, 0, q2,
+		}),
+		R: mat.NewDense(2, 2, []float64{20, 0, 0, 0.2}),
+	}
 
-	return &ctx, &pred, &upd
+	return lti, nse
+}
+
+//NewImplementedFilter returns the implementation of the Kalman filter for testing
+func newImplementedFilter() *filterImpl {
+	lti, nse := newSetup()
+	return &filterImpl{lti, nse, nil}
 }
 
 func TestPredictionState(t *testing.T) {
-	ctx, pred, _ := NewSetup()
+	ctx := newContext()
+	filter := newImplementedFilter()
 
 	// predict next state
-	ctrl := mat.NewVecDense(1, []float64{2.0})
-	if err := pred.NextState(ctx, ctrl); err != nil {
-		t.Error(err)
-	}
-	expectedVec := mat.NewVecDense(2, []float64{4281.0, 282.0})
+	ctrl := mat.NewVecDense(1, nil)
+	filter.NextState(ctx, ctrl)
+
+	expectedVec := mat.NewVecDense(4, []float64{
+		976.32498, 0.0092222, 0.092222, 0,
+	})
 	if !mat.EqualApprox(expectedVec, ctx.X, 1e-4) {
 		fmt.Println("actual:", ctx.X)
 		fmt.Println("expected:", expectedVec)
@@ -49,13 +86,19 @@ func TestPredictionState(t *testing.T) {
 }
 
 func TestPredictionCovariance(t *testing.T) {
-	ctx, pred, _ := NewSetup()
+	ctx := newContext()
+	filter := newImplementedFilter()
 
 	// predict next covariance
-	if err := pred.NextCovariance(ctx); err != nil {
-		t.Error(err)
-	}
-	expected := mat.NewDense(2, 2, []float64{450.0, 25.0, 25.0, 25.0})
+	filter.NextCovariance(ctx)
+
+	// predict next covariance
+	expected := mat.NewDense(4, 4, []float64{
+		3.0304, 0.30706, 0.070556, 0,
+		0.30706, 3.1411, 1.4111, 0,
+		0.070556, 1.4111, 14.111, 0,
+		0, 0, 0, 0.03004,
+	})
 	if !mat.EqualApprox(expected, ctx.P, 1e-4) {
 		fmt.Println("actual:", ctx.P)
 		fmt.Println("expected:", expected)
@@ -64,57 +107,76 @@ func TestPredictionCovariance(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	ctx, pred, upd := NewSetup()
+	ctx := newContext()
+	filter := newImplementedFilter()
 
-	// predict next state
-	ctrl := mat.NewVecDense(1, []float64{2.0})
-	if err := pred.NextState(ctx, ctrl); err != nil {
+	ctrl := mat.NewVecDense(1, nil)
+	z := mat.NewVecDense(2, []float64{
+		976.32452, 0.092222,
+	})
+	if err := filter.Update(ctx, z, ctrl); err != nil {
 		t.Error(err)
 	}
-	// predict next covariance
-	if err := pred.NextCovariance(ctx); err != nil {
-		t.Error(err)
-	}
-
-	// update
-	z := mat.NewVecDense(2, []float64{4260.0, 282.0})
-	if err := upd.Update(ctx, z); err != nil {
-		t.Error(err)
-	}
-	expectedX := mat.NewVecDense(2, []float64{4272.32678984, 281.70900693})
+	expectedX := mat.NewVecDense(4, []float64{
+		976.32452, 0, 0.092222, 0,
+	})
 	if !mat.EqualApprox(expectedX, ctx.X, 1e-4) {
 		fmt.Println("actual:", ctx.X)
 		fmt.Println("expected:", expectedX)
 		t.Error("UpdateState")
 	}
-	expectedP := mat.NewDense(2, 2, []float64{258.1312548113933, 8.660508083140876, 8.66050808314088, 14.549653580})
-	if !mat.EqualApprox(expectedP, ctx.P, 1e-4) {
-		fmt.Println("actual:", ctx.P)
-		fmt.Println("expected:", expectedP)
-		t.Error("UpdateCovariance")
-	}
 }
 
 func TestFilter(t *testing.T) {
-	ctx, pred, upd := NewSetup()
-	filter := NewFilter(ctx.X, ctx.P, pred.F, pred.B, pred.Q, upd.H, upd.R)
+	lti, nse := newSetup()
+	ctx := newContext()
+	filter := NewFilter(lti, nse)
 
-	ctrl := mat.NewVecDense(1, []float64{2.0})
-	z := mat.NewVecDense(2, []float64{4260.0, 282.0})
+	ctrl := mat.NewVecDense(1, nil)
 
-	filteredState := filter.Apply(z, ctrl)
-	expectedX := mat.NewVecDense(2, []float64{4105.238095238095, 280.8196721311475})
-	if !mat.EqualApprox(expectedX, filteredState, 1e-4) {
-		fmt.Println("actual:", filteredState)
-		fmt.Println("expected:", expectedX)
-		t.Error("ApplyFilter")
+	config := []struct {
+		Iter     int
+		Input    []float64
+		Expected []float64
+	}{
+		{
+			Iter: 1,
+			Input: []float64{
+				976.32, 0.092222,
+			},
+			Expected: []float64{
+				976.32452, 0.092222202,
+			},
+		},
+		{
+			Iter: 2,
+			Input: []float64{
+				979.37006, 0.52210785,
+			},
+			Expected: []float64{
+				976.6817722228133, 0.5147628306401388,
+			},
+		},
+		{
+			Iter: 3,
+			Input: []float64{
+				977.8754, 0.98211677,
+			},
+			Expected: []float64{
+				976.8229728968552, 0.9740485904798598,
+			},
+		},
 	}
 
-	checkState := filter.State()
-	if !mat.EqualApprox(filteredState, checkState, 1e-4) {
-		fmt.Println("actual:", checkState)
-		fmt.Println("expected:", filteredState)
-		t.Error("StateFilter")
+	for _, cfg := range config {
+		z := mat.NewVecDense(2, cfg.Input)
+		filteredResult := filter.Apply(ctx, z, ctrl)
+		expectedResult := mat.NewVecDense(2, cfg.Expected)
+		if !mat.EqualApprox(expectedResult, filteredResult, 1e-4) {
+			fmt.Println("actual:", filteredResult)
+			fmt.Println("expected:", expectedResult)
+			t.Error("ApplyFilter:", cfg.Iter)
+		}
 	}
 
 }

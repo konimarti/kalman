@@ -12,25 +12,35 @@
 
 ## Using the standard Kalman filter
 ```go
-	// create matrices and vectors
-	...
 
-	// create Kalman filter
+	// create filter
 	filter := kalman.NewFilter(
+
+		lti.Discrete{
+			Ad, // prediction matrix (n x n)
+			Bd, // control matrix (n x k)
+			C,  // measurement matrix (l x n)
+			D,  // measurement matrix (l x n)
+		},
+
+		kalman.Noise{
+			Q, // process model covariance matrix (n x n)
+			R, // measurement errors (l x l)
+		}
+
+	)
+
+	// create context
+	ctx := kalman.Context{
 		X, // initial state (n x 1)
 		P, // initial process covariance (n x n)
-		F, // prediction matrix (n x n)
-		B, // control matrix (n x k)
-		Q, // process model covariance matrix (n x n)
-		H, // measurement matrix (l x n)
-		R, // measurement errors (l x l)
-	)
+	}
 
 	// get measurement (l x 1) and control (k x 1) vectors
 	..
 
 	// apply filter
-	filtered := filter.Apply(measurement, control)
+	filteredMeasurement := filter.Apply(ctx, measurement, control)
 }
 ```
 
