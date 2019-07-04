@@ -30,7 +30,7 @@
 			Ad, // prediction matrix (n x n)
 			Bd, // control matrix (n x k)
 			C,  // measurement matrix (l x n)
-			D,  // measurement matrix (l x n)
+			D,  // measurement matrix (l x k)
 		},
 		kalman.Noise{
 			Q, // process model covariance matrix (n x n)
