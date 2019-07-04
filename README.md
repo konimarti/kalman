@@ -48,7 +48,7 @@
 	..
 
 	// apply filter
-	filteredMeasurement := filter.Apply(ctx, measurement, control)
+	filteredMeasurement := filter.Apply(&ctx, measurement, control)
 }
 ```
 
