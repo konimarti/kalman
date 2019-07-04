@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/konimarti/kalman"
+	"github.com/konimarti/lti"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -25,23 +26,28 @@ func main() {
 	fmt.Fprintln(file, "m,f")
 
 	// definie LTI system
-	Ad := mat.NewDense(1, 1, []float64{1})
-	Bd := mat.NewDense(1, 1, nil)
-	C := mat.NewDense(1, 1, []float64{1})
+	lti := lti.Discrete{
+		Ad: mat.NewDense(1, 1, []float64{1}),
+		Bd: mat.NewDense(1, 1, nil),
+		C:  mat.NewDense(1, 1, []float64{1}),
+		D:  mat.NewDense(1, 1, nil),
+	}
 
 	// system noise / process model covariance matrix ("Systemrauschen")
 	Gd := mat.NewDense(1, 1, []float64{1})
 
-	// initial state
-	x := mat.NewVecDense(1, []float64{y[0]})
-	// initial covariance matrix
-	P := mat.NewDense(1, 1, []float64{0})
+	ctx := kalman.Context{
+		// initial state
+		X: mat.NewVecDense(1, []float64{y[0]}),
+		// initial covariance matrix
+		P: mat.NewDense(1, 1, []float64{0}),
+	}
 
 	// create ROSE filter
 	gammaR := 9.0
 	alphaR := 0.5
 	alphaM := 0.3
-	filter := kalman.NewRoseFilter(x, P, Ad, Bd, C, Gd, gammaR, alphaR, alphaM)
+	filter := kalman.NewRoseFilter(lti, Gd, gammaR, alphaR, alphaM)
 
 	// no control
 	u := mat.NewVecDense(1, nil)
@@ -51,7 +57,7 @@ func main() {
 		y := mat.NewVecDense(1, []float64{row})
 
 		// apply filter
-		filter.Apply(y, u)
+		filter.Apply(&ctx, y, u)
 
 		// get corrected state vector
 		state := filter.State()
