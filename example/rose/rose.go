@@ -25,7 +25,7 @@ func main() {
 
 	fmt.Fprintln(file, "m,f")
 
-	// definie LTI system
+	// define LTI system
 	lti := lti.Discrete{
 		Ad: mat.NewDense(1, 1, []float64{1}),
 		Bd: mat.NewDense(1, 1, nil),
