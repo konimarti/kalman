@@ -35,7 +35,7 @@
 		kalman.Noise{
 			Q, // process model covariance matrix (n x n)
 			R, // measurement errors (l x l)
-		}
+		},
 	)
 
 	// create context
