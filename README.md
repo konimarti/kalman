@@ -64,6 +64,24 @@ See example [here](example/car/car.go).
 
 See example [here](example/rose/rose.go).
 
+### Math behind the Kalman filter
+
+* Calculation of the Kalman gain and the correction of the state vector ~x(k) and covariance matrix ~P(k):
+	```math
+	^y(k)  = C * ^x(k) + D * u(k)
+	dy(k)  = y(k) - ^y(k)
+	K(k) = ^P(k) * C^T * ( C * ^P(k) * C^T + R(k) )^(-1)
+	~x(k) = ^x(k) + K(k) * dy(k)
+	~P(k) = ( I - K(k) * C) * ^P(k)
+	```
+* Then the next step is predicted for the state ^x(k+1) and the covariance ^P(k+1):
+	```math
+	^x(k+1) = Ad * ~x(k) + Bd * u(k)
+	^P(k+1) = Ad * ~P(k) * Ad^T + Gd * Q(k) * Gd^T
+	```
+  
+  
+
 ## Credits
 
 This software package has been developed for and is in production at [Kalkfabrik Netstal](http://www.kfn.ch/en).
