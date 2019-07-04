@@ -103,8 +103,8 @@ func (f *filterImpl) Update(ctx *Context, z, ctrl mat.Vector) error {
 	// (H P H^T + R)^T K^T = (P H^T )^T
 	err := kt.Solve(denom.T(), PHt.T())
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Setting Kalman gain to zero")
+		//log.Println(err)
+		//log.Println("setting Kalman gain to zero")
 		denom.Zero()
 		K.Product(ctx.P, f.Lti.C.T(), &denom)
 	} else {

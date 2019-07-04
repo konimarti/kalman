@@ -13,9 +13,9 @@ type roseImpl struct {
 //Apply implements the Filter interface
 func (r *roseImpl) Apply(ctx *Context, z, ctrl *mat.VecDense) mat.Vector {
 
-	// update rose
+	// adaptively update noise matrices
 	r.Std.Nse.R = r.Rose.R(z)
-	r.Std.Nse.Q = r.Rose.Q(z, ctx, r.Std.Lti, r.Std.Nse.R)
+	r.Std.Nse.Q = r.Rose.Q(ctx, z, ctrl, r.Std.Lti, r.Std.Nse.R)
 
 	return r.Std.Apply(ctx, z, ctrl)
 }
@@ -41,16 +41,19 @@ type rose struct {
 }
 
 //Q
-func (r *rose) Q(y *mat.VecDense, ctx *Context, lti lti.Discrete, R *mat.Dense) *mat.Dense {
+func (r *rose) Q(ctx *Context, y, ctrl *mat.VecDense, lti lti.Discrete, R *mat.Dense) *mat.Dense {
 	x := ctx.X
 	P := ctx.P
 	H := lti.C
 	F := lti.Ad
+	D := lti.D
 
-	// dy = y - hx
-	var hx, dy mat.VecDense
+	// dy = y - hx - d ctrl
+	var hx, dctrl, dy mat.VecDense
 	hx.MulVec(H, x)
+	dctrl.MulVec(D, ctrl)
 	dy.SubVec(y, &hx)
+	dy.SubVec(&dy, &dctrl)
 
 	// M = AlphaM * dy * dy' + (1-AlphaM) * M
 	var dy2 mat.Dense
