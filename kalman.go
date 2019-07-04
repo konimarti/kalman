@@ -83,25 +83,26 @@ func (f *filterImpl) NextState(ctx *Context, ctrl *mat.VecDense) error {
 //NextCovariance
 func (f *filterImpl) NextCovariance(ctx *Context) error {
 	// P_new = Ad * P * Ad^t + Q
-	ctx.P.Product(f.Lti.Ad, ctx.P, f.Lti.Ad.T())
-	ctx.P.Add(ctx.P, f.Nse.Q)
+	//ctx.P.Product(f.Lti.Ad, ctx.P, f.Lti.Ad.T())
+	//ctx.P.Add(ctx.P, f.Nse.Q)
+	ctx.P = lti.NewCovariance(f.Lti.Ad).Predict(ctx.P, f.Nse.Q)
 	return nil
 }
 
 //Update performs Kalman update
 func (f *filterImpl) Update(ctx *Context, z, ctrl mat.Vector) error {
 	// kalman gain
-	// K = P H^T (H P H^T + R)^-1
-	var K, kt, PHt, HPHt, denom mat.Dense
-	PHt.Mul(ctx.P, f.Lti.C.T())
-	HPHt.Mul(f.Lti.C, &PHt)
-	denom.Add(&HPHt, f.Nse.R)
+	// K = P C^T (C P C^T + R)^-1
+	var K, kt, PCt, CPCt, denom mat.Dense
+	PCt.Mul(ctx.P, f.Lti.C.T())
+	CPCt.Mul(f.Lti.C, &PCt)
+	denom.Add(&CPCt, f.Nse.R)
 
 	// calculation of Kalman gain with mat.Solve(..)
-	// K = P H^T (H P H^T + R)^-1
-	// K * (H P H^T + R) = P H^T
-	// (H P H^T + R)^T K^T = (P H^T )^T
-	err := kt.Solve(denom.T(), PHt.T())
+	// K = P C^T (C P C^T + R)^-1
+	// K * (C P C^T + R) = P C^T
+	// (C P C^T + R)^T K^T = (P C^T )^T
+	err := kt.Solve(denom.T(), PCt.T())
 	if err != nil {
 		//log.Println(err)
 		//log.Println("setting Kalman gain to zero")
@@ -112,20 +113,20 @@ func (f *filterImpl) Update(ctx *Context, z, ctrl mat.Vector) error {
 	}
 
 	// update state
-	// X~_k = X_k + K * [z_k - H * X_k - D * ctrl ]
-	var HXk, DCtrl, bracket, Kupd mat.VecDense
-	HXk.MulVec(f.Lti.C, ctx.X)
+	// X~_k = X_k + K * [z_k - C * X_k - D * ctrl ]
+	var CXk, DCtrl, bracket, Kupd mat.VecDense
+	CXk.MulVec(f.Lti.C, ctx.X)
 	DCtrl.MulVec(f.Lti.D, ctrl)
-	bracket.SubVec(z, &HXk)
-	//bracket.SubVec(&bracket, &DCtrl)
+	bracket.SubVec(z, &CXk)
+	bracket.SubVec(&bracket, &DCtrl)
 	Kupd.MulVec(&K, &bracket)
 	ctx.X.AddVec(ctx.X, &Kupd)
 
 	// update covariance
-	// P~_k = P_k - K * [H_k * P_k]
-	var KHP mat.Dense
-	KHP.Product(&K, f.Lti.C, ctx.P)
-	ctx.P.Sub(ctx.P, &KHP)
+	// P~_k = P_k - K * [C * P_k]
+	var KCP mat.Dense
+	KCP.Product(&K, f.Lti.C, ctx.P)
+	ctx.P.Sub(ctx.P, &KCP)
 
 	return nil
 }
