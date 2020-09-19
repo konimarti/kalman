@@ -23,7 +23,7 @@ func (r *roseImpl) Apply(ctx *Context, z, ctrl *mat.VecDense) mat.Vector {
 //State return the current state of the context
 func (r *roseImpl) State() mat.Vector {
 	var state mat.VecDense
-	state.CloneVec(r.Std.savedState)
+	state.CloneFromVec(r.Std.savedState)
 	return &state
 }
 

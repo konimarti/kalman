@@ -134,6 +134,6 @@ func (f *filterImpl) Update(ctx *Context, z, ctrl mat.Vector) error {
 //State return the current state of the context
 func (f *filterImpl) State() mat.Vector {
 	var state mat.VecDense
-	state.CloneVec(f.savedState)
+	state.CloneFromVec(f.savedState)
 	return &state
 }
