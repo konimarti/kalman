@@ -8,5 +8,3 @@ require (
 	gonum.org/v1/gonum v0.8.1
 	gonum.org/v1/netlib v0.0.0-20190331212654-76723241ea4e // indirect
 )
-
-replace github.com/konimarti/kalman v0.0.2 => github.com/Osram-Gru/kalman v0.0.2
