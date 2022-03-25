@@ -11,8 +11,13 @@ import (
 
 //Context contains the current state and covariance of the system
 type Context struct {
-	X *mat.VecDense // Current system state
-	P *mat.Dense    // Current covariance matrix
+	X                         *mat.VecDense // Current system state
+	P                         *mat.Dense    // Current covariance matrix
+	pmt                       mat.Dense     // Workspace for calculating next covariance
+	mpmt                      mat.Dense     // Workspace for calculating next covariance
+	k, kt, pct, cpct, denom   mat.Dense     // Workspace for calculating Update()
+	cxk, dCtrl, bracket, kupd mat.VecDense
+	kcp                       mat.Dense
 }
 
 //Noise represents the measurement and system noise
@@ -85,7 +90,7 @@ func (f *filterImpl) NextCovariance(ctx *Context) error {
 	// P_new = Ad * P * Ad^t + Q
 	//ctx.P.Product(f.Lti.Ad, ctx.P, f.Lti.Ad.T())
 	//ctx.P.Add(ctx.P, f.Nse.Q)
-	ctx.P = lti.NewCovariance(f.Lti.Ad).Predict(ctx.P, f.Nse.Q)
+	ctx.P = lti.NewCovariance(f.Lti.Ad).Predict(ctx.P, f.Nse.Q, &ctx.pmt, &ctx.mpmt)
 	return nil
 }
 
@@ -93,40 +98,42 @@ func (f *filterImpl) NextCovariance(ctx *Context) error {
 func (f *filterImpl) Update(ctx *Context, z, ctrl mat.Vector) error {
 	// kalman gain
 	// K = P C^T (C P C^T + R)^-1
-	var K, kt, PCt, CPCt, denom mat.Dense
-	PCt.Mul(ctx.P, f.Lti.C.T())
-	CPCt.Mul(f.Lti.C, &PCt)
-	denom.Add(&CPCt, f.Nse.R)
+	ctx.pct.Mul(ctx.P, f.Lti.C.T())
+	ctx.cpct.Mul(f.Lti.C, &ctx.pct)
+	ctx.denom.Add(&ctx.cpct, f.Nse.R)
 
 	// calculation of Kalman gain with mat.Solve(..)
 	// K = P C^T (C P C^T + R)^-1
 	// K * (C P C^T + R) = P C^T
 	// (C P C^T + R)^T K^T = (P C^T )^T
-	err := kt.Solve(denom.T(), PCt.T())
+	err := ctx.kt.Solve(ctx.denom.T(), ctx.pct.T())
 	if err != nil {
 		//log.Println(err)
 		//log.Println("setting Kalman gain to zero")
-		denom.Zero()
-		K.Product(ctx.P, f.Lti.C.T(), &denom)
+		ctx.denom.Zero()
+		ctx.k.Product(ctx.P, f.Lti.C.T(), &ctx.denom)
 	} else {
-		K.CloneFrom(kt.T())
+		r, c := ctx.k.Dims()
+		if r == 0 && c == 0 {
+			ctx.k.CloneFrom(ctx.kt.T())
+		} else {
+			ctx.k.Copy(ctx.kt.T())
+		}
 	}
 
 	// update state
 	// X~_k = X_k + K * [z_k - C * X_k - D * ctrl ]
-	var CXk, DCtrl, bracket, Kupd mat.VecDense
-	CXk.MulVec(f.Lti.C, ctx.X)
-	DCtrl.MulVec(f.Lti.D, ctrl)
-	bracket.SubVec(z, &CXk)
-	bracket.SubVec(&bracket, &DCtrl)
-	Kupd.MulVec(&K, &bracket)
-	ctx.X.AddVec(ctx.X, &Kupd)
+	ctx.cxk.MulVec(f.Lti.C, ctx.X)
+	ctx.dCtrl.MulVec(f.Lti.D, ctrl)
+	ctx.bracket.SubVec(z, &ctx.cxk)
+	ctx.bracket.SubVec(&ctx.bracket, &ctx.dCtrl)
+	ctx.kupd.MulVec(&ctx.k, &ctx.bracket)
+	ctx.X.AddVec(ctx.X, &ctx.kupd)
 
 	// update covariance
 	// P~_k = P_k - K * [C * P_k]
-	var KCP mat.Dense
-	KCP.Product(&K, f.Lti.C, ctx.P)
-	ctx.P.Sub(ctx.P, &KCP)
+	ctx.kcp.Product(&ctx.k, f.Lti.C, ctx.P)
+	ctx.P.Sub(ctx.P, &ctx.kcp)
 
 	return nil
 }
